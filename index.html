@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Interactive Bézier Rope</title>
+  <style>
+    body {
+      margin: 0;
+      background: #0d1117;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<script>
+/* =====================
+   Canvas Setup
+===================== */
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener("resize", resize);
+
+/* =====================
+   Vector Utilities
+===================== */
+function vec(x, y) {
+  return { x, y };
+}
+
+function add(a, b) {
+  return vec(a.x + b.x, a.y + b.y);
+}
+
+function sub(a, b) {
+  return vec(a.x - b.x, a.y - b.y);
+}
+
+function mul(v, s) {
+  return vec(v.x * s, v.y * s);
+}
+
+function length(v) {
+  return Math.sqrt(v.x * v.x + v.y * v.y);
+}
+
+function normalize(v) {
+  const len = length(v) || 1;
+  return vec(v.x / len, v.y / len);
+}
+
+/* =====================
+   Control Points
+===================== */
+const P0 = vec(100, canvas.height / 2);
+const P3 = vec(canvas.width - 100, canvas.height / 2);
+
+const P1 = {
+  pos: vec(canvas.width / 3, canvas.height / 2 - 100),
+  vel: vec(0, 0),
+  target: vec(canvas.width / 3, canvas.height / 2)
+};
+
+const P2 = {
+  pos: vec(canvas.width * 2 / 3, canvas.height / 2 + 100),
+  vel: vec(0, 0),
+  target: vec(canvas.width * 2 / 3, canvas.height / 2)
+};
+
+/* =====================
+   Physics Constants
+===================== */
+const SPRING = 0.02;
+const DAMPING = 0.85;
+
+/* =====================
+   Mouse Input
+===================== */
+canvas.addEventListener("mousemove", e => {
+  const x = e.clientX;
+  const y = e.clientY;
+
+  P1.target = vec(x - 100, y);
+  P2.target = vec(x + 100, y);
+});
+
+/* =====================
+   Spring Physics Update
+===================== */
+function updateSpring(point) {
+  const force = sub(point.target, point.pos);
+  point.vel.x += force.x * SPRING;
+  point.vel.y += force.y * SPRING;
+
+  point.vel.x *= DAMPING;
+  point.vel.y *= DAMPING;
+
+  point.pos.x += point.vel.x;
+  point.pos.y += point.vel.y;
+}
+
+/* =====================
+   Bézier Functions
+===================== */
+function bezier(t, P0, P1, P2, P3) {
+  const u = 1 - t;
+  const tt = t * t;
+  const uu = u * u;
+
+  const p = mul(P0, uu * u);
+  const p1 = mul(P1, 3 * uu * t);
+  const p2 = mul(P2, 3 * u * tt);
+  const p3 = mul(P3, tt * t);
+
+  return add(add(p, p1), add(p2, p3));
+}
+
+function bezierTangent(t, P0, P1, P2, P3) {
+  const u = 1 - t;
+
+  const term1 = mul(sub(P1, P0), 3 * u * u);
+  const term2 = mul(sub(P2, P1), 6 * u * t);
+  const term3 = mul(sub(P3, P2), 3 * t * t);
+
+  return add(add(term1, term2), term3);
+}
+
+/* =====================
+   Rendering
+===================== */
+function drawControlPoint(p, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  /* Draw Bézier Curve */
+  ctx.strokeStyle = "#58a6ff";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+
+  for (let t = 0; t <= 1; t += 0.01) {
+    const p = bezier(t, P0, P1.pos, P2.pos, P3);
+    if (t === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  }
+  ctx.stroke();
+
+  /* Draw Tangents */
+  ctx.strokeStyle = "#f0f6fc";
+  ctx.lineWidth = 1;
+
+  for (let t = 0; t <= 1; t += 0.1) {
+    const p = bezier(t, P0, P1.pos, P2.pos, P3);
+    const tan = normalize(bezierTangent(t, P0, P1.pos, P2.pos, P3));
+    const end = add(p, mul(tan, 30));
+
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+  }
+
+  /* Draw Control Points */
+  drawControlPoint(P0, "#2ea043");
+  drawControlPoint(P1.pos, "#f85149");
+  drawControlPoint(P2.pos, "#f85149");
+  drawControlPoint(P3, "#2ea043");
+}
+
+/* =====================
+   Main Loop
+===================== */
+function animate() {
+  updateSpring(P1);
+  updateSpring(P2);
+
+  draw();
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>
